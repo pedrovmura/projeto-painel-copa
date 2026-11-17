@@ -1,0 +1,315 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+  --navy: #0A1628;
+  --navyMid: #1E2D45;
+  --gold: #F5C518;
+  --white: #FFFFFF;
+  --offWhite: #E8EDF5;
+  --textMuted: #8DA3C4;
+  --greenLight: #228B38;
+  --red: #C41E3A;
+  --fontClara: #e0e1dd;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--navy);
+  color: var(--offWhite);
+  -webkit-font-smoothing: antialiased;
+}
+
+.container-wrapper {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.main-title {
+  font-size: 72px !important;
+  line-height: 0.9;
+  transition: font-size 0.3s ease;
+}
+
+.main-title span {
+  font-size: 96px !important;
+}
+
+.home-desc {
+  font-size: 20px !important;
+  font-weight: 500;
+  margin-top: 15px;
+  color: var(--textMuted);
+}
+
+@media (max-width: 1024px) {
+  .main-title { font-size: 58px !important; }
+  .main-title span { font-size: 78px !important; }
+  .home-desc { font-size: 18px !important; }
+}
+
+@media (max-width: 600px) {
+  .main-title { font-size: 42px !important; }
+  .main-title span { font-size: 56px !important; }
+  .home-desc { font-size: 15px !important; }
+}
+
+@media (max-width: 400px) {
+  .main-title { font-size: 34px !important; }
+  .main-title span { font-size: 46px !important; }
+}
+
+.landing-container {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 20px 0 30px;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.landing-timer-box {
+  width: 100%;
+  background: var(--navyMid);
+  border: 1px solid rgba(245, 197, 24, 0.25);
+  border-radius: 12px;
+  padding: 24px 20px;
+  text-align: center;
+  box-sizing: border-box;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.landing-timer-number {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--white);
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+
+.landing-stats-row {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.landing-buttons {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  max-width: 500px;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 520px) {
+  .landing-stats-row { flex-direction: column; }
+  .landing-buttons { flex-direction: column; }
+}
+
+.responsive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+  width: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .detail-grid { grid-template-columns: 1fr; }
+}
+
+.bracket-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.bracket-split-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  width: 100%;
+  gap: 24px;
+  align-items: center;
+}
+
+.bracket-side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bracket-match-box {
+  background: var(--navyMid);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.bracket-match-box::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 1px;
+  background: rgba(245, 197, 24, 0.3);
+}
+
+.bracket-side-column:first-child .bracket-match-box::after { right: -14px; }
+.bracket-side-column:last-child .bracket-match-box::after { left: -14px; }
+
+.bracket-team-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.bracket-center-podium {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  background: rgba(4, 10, 18, 0.4);
+  border: 1px dashed rgba(245, 197, 24, 0.15);
+  border-radius: 16px;
+  padding: 40px 20px;
+  box-sizing: border-box;
+}
+
+.final-grand-box {
+  background: linear-gradient(135deg, var(--navyMid) 0%, rgba(245,197,24,0.06) 100%);
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 310px;
+  padding: 24px 20px;
+  box-shadow: 0 12px 36px rgba(245, 197, 24, 0.15);
+  box-sizing: border-box;
+}
+
+.final-third-box {
+  background: var(--navyMid);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 250px;
+  padding: 14px 16px;
+  box-sizing: border-box;
+  opacity: 0.9;
+}
+
+@media (max-width: 980px) {
+  .bracket-split-layout { grid-template-columns: 1fr; gap: 30px; }
+  .bracket-center-podium { grid-row: 1; }
+  .bracket-match-box::after { display: none; }
+}
+
+.center-btn-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 30px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PATCH DE ANIMAÇÕES — adicione este bloco ao seu styles.css
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Fade + slide para entrada de páginas e cards ── */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Pulse do indicador "AO VIVO" ── */
+@keyframes livePulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+  }
+}
+
+/* ── Entrada de página completa ── */
+.page-enter {
+  animation: fadeSlideIn 0.35s ease both;
+}
+
+/* ── Cards individuais dentro da landing (stagger via inline style) ── */
+.today-match-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.today-match-card:hover {
+  transform: translateY(-1px);
+}
+
+/* ── Respeita preferência do sistema por menos movimento ── */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .today-match-card,
+  [style*="fadeSlideIn"] {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+/* ═══════════════════════════════════════════════════════════════
+   TRANSIÇÕES DE PÁGINA — slide lateral
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Entrada vindo da direita (navegar para frente) */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Entrada vindo da esquerda (voltar) */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.page-slide-forward {
+  animation: slideInRight 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.page-slide-back {
+  animation: slideInLeft 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-slide-forward,
+  .page-slide-back { animation: none !important; }
+}
