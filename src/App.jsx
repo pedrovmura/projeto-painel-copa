@@ -368,7 +368,7 @@ function TodayMatchCardWithLive({ match, index }) {
 }
 
 // ─── COMPONENTE: Busca por seleção ────────────────────────────────────────────
-function TeamSearch({ groups, onClose }) {
+function TeamSearch({ groups, knockoutMatches = [], onClose }) {
   const [query, setQuery] = useState('');
   const [visible, setVisible] = useState(false);
   const inputRef = useRef(null);
@@ -398,7 +398,9 @@ function TeamSearch({ groups, onClose }) {
   const q = query.trim().toLowerCase();
   const filtered = q.length >= 1 ? allTeams.filter(t => t.name.toLowerCase().includes(q)) : [];
 
-  // Para um time encontrado, busca seus jogos e posição na tabela
+  // Para um time encontrado, busca seus jogos (grupos + mata-mata) e posição na tabela
+  const resolveKnockout = makeKnockoutResolver(groups, knockoutMatches);
+
   const getTeamData = (teamName) => {
     const teamMatches = [];
     let groupId = null;
@@ -408,14 +410,25 @@ function TeamSearch({ groups, onClose }) {
       const gMatches = g.matches.filter(m => m.t1 === teamName || m.t2 === teamName);
       if (gMatches.length > 0) {
         groupId = g.id;
-        gMatches.forEach(m => teamMatches.push(m));
+        gMatches.forEach(m => teamMatches.push({ ...m, _ordem: m.r || 0, _fase: `Grupo ${g.id} · Rodada ${m.r}` }));
         const sorted = sortedTeams(g.teams, g.matches);
         const pos = sorted.findIndex(t => t.name === teamName);
         if (pos !== -1) standing = { pos: pos + 1, stats: sorted[pos] };
       }
     });
 
-    teamMatches.sort((a, b) => (a.r || 0) - (b.r || 0));
+    // Jogos do mata-mata: traduz os rótulos para descobrir quem joga cada partida
+    knockoutMatches.forEach(m => {
+      const t1 = resolveKnockout(m.t1);
+      const t2 = resolveKnockout(m.t2);
+      if (t1 === teamName || t2 === teamName) {
+        const faseKey = (m.fase || '').toLowerCase();
+        teamMatches.push({ ...m, t1, t2, _ordem: m.jogo, _fase: PHASE_LABELS[faseKey] || m.fase || 'Mata-Mata' });
+      }
+    });
+
+    // Grupos (rodadas 1–3) vêm primeiro, depois o mata-mata (jogos 73+)
+    teamMatches.sort((a, b) => a._ordem - b._ordem);
     return { teamMatches, groupId, standing };
   };
 
@@ -533,19 +546,9 @@ function TeamSearch({ groups, onClose }) {
               {/* Jogos do time */}
               <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '1.5px', textTransform: 'uppercase', color: colors.textMuted, marginBottom: '10px' }}>Jogos</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {teamData.teamMatches.map((m, i) => {
-                  const isLive = false; // Aqui useIsLive não pode ser chamado em map, usamos o componente
-                  const isFuture = m.s1 === null || m.s2 === null;
-                  const isTeam1 = m.t1 === exactMatch.name;
-                  const won = !isFuture && ((isTeam1 && m.s1 > m.s2) || (!isTeam1 && m.s2 > m.s1));
-                  const drew = !isFuture && m.s1 === m.s2;
-                  const lost = !isFuture && !won && !drew;
-                  const resultColor = isFuture ? colors.textMuted : won ? '#4ade80' : drew ? colors.gold : '#f87171';
-                  const resultLabel = isFuture ? '' : won ? 'V' : drew ? 'E' : 'D';
-                  return (
-                    <SearchMatchRow key={i} match={m} teamName={exactMatch.name} resultColor={resultColor} resultLabel={resultLabel} isFuture={isFuture} />
-                  );
-                })}
+                {teamData.teamMatches.map((m, i) => (
+                  <SearchMatchRow key={i} match={m} teamName={exactMatch.name} />
+                ))}
               </div>
             </div>
           )}
@@ -570,13 +573,33 @@ function TeamSearch({ groups, onClose }) {
 }
 
 // Row de jogo dentro do modal de busca (componente separado para poder usar o hook isLive)
-function SearchMatchRow({ match, teamName, resultColor, resultLabel, isFuture }) {
-  const isLive = useIsLive(match.date, match.time);
+function SearchMatchRow({ match, teamName }) {
+  const isKnockout = typeof match.jogo === 'number';
+  const isLive = useIsLive(match.date, match.time, isKnockout ? KNOCKOUT_MATCH_DURATION_MINUTES : MATCH_DURATION_MINUTES);
+  const isFuture = match.s1 === null || match.s2 === null;
   const isTeam1 = match.t1 === teamName;
-  const won = !isFuture && ((isTeam1 && match.s1 > match.s2) || (!isTeam1 && match.s2 > match.s1));
-  const drew = !isFuture && match.s1 === match.s2;
-  const actualResultColor = isFuture ? (isLive ? '#f87171' : colors.textMuted) : won ? '#4ade80' : drew ? colors.gold : '#f87171';
-  const actualResultLabel = isLive ? '●' : (isFuture ? '' : (won ? 'V' : drew ? 'E' : 'D'));
+  const hasPenalties = match.pen1 != null && match.pen2 != null && match.pen1 !== match.pen2;
+
+  // V / E / D do ponto de vista da seleção buscada (pênaltis decidem no mata-mata)
+  let resultado = null;
+  if (!isFuture) {
+    const golsPro    = isTeam1 ? match.s1 : match.s2;
+    const golsContra = isTeam1 ? match.s2 : match.s1;
+    if (golsPro > golsContra) resultado = 'V';
+    else if (golsPro < golsContra) resultado = 'D';
+    else if (hasPenalties) {
+      const penPro    = isTeam1 ? match.pen1 : match.pen2;
+      const penContra = isTeam1 ? match.pen2 : match.pen1;
+      resultado = penPro > penContra ? 'V' : 'D';
+    } else resultado = 'E';
+  }
+
+  const cor = isLive ? '#f87171'
+    : resultado === 'V' ? '#4ade80'
+    : resultado === 'E' ? colors.gold
+    : resultado === 'D' ? '#f87171'
+    : colors.textMuted;
+  const label = isLive ? '●' : (resultado || '');
 
   return (
     <div style={{
@@ -586,24 +609,28 @@ function SearchMatchRow({ match, teamName, resultColor, resultLabel, isFuture })
       borderRadius: '8px', padding: '10px 12px',
       transition: 'background 0.2s',
     }}>
-      <div style={{
-        width: '20px', textAlign: 'center',
-        fontSize: isLive ? '10px' : '12px', fontWeight: '800',
-        color: actualResultColor,
-      }}>{actualResultLabel}</div>
-      <div style={{ flex: 1 }}>
+      <div style={{ width: '20px', textAlign: 'center', fontSize: isLive ? '10px' : '12px', fontWeight: '800', color: cor }}>
+        {label}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: '13px', fontWeight: '700', color: colors.white }}>
           {match.t1} <span style={{ color: colors.textMuted, fontWeight: '400' }}>vs</span> {match.t2}
         </div>
-        {isLive && (
-          <div style={{ marginTop: '2px' }}><LiveBadge /></div>
-        )}
+        <div style={{ fontSize: '10px', color: isKnockout ? colors.gold : colors.textMuted, marginTop: '2px', fontWeight: '600' }}>
+          {match._fase}
+        </div>
+        {isLive && <div style={{ marginTop: '4px' }}><LiveBadge /></div>}
       </div>
-      <div style={{ textAlign: 'right' }}>
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
         {isFuture && !isLive ? (
           <div style={{ fontSize: '12px', color: colors.gold, fontWeight: '600' }}>{match.time}</div>
         ) : (
-          <div style={{ fontSize: '14px', fontWeight: '800', color: isLive ? '#f87171' : colors.white }}>{match.s1}–{match.s2}</div>
+          <div style={{ fontSize: '14px', fontWeight: '800', color: isLive ? '#f87171' : colors.white }}>
+            {match.s1}–{match.s2}
+          </div>
+        )}
+        {hasPenalties && (
+          <div style={{ fontSize: '10px', color: colors.gold, fontWeight: '700' }}>pên. {match.pen1}–{match.pen2}</div>
         )}
         <div style={{ fontSize: '10px', color: colors.textMuted }}>{match.date}</div>
       </div>
@@ -816,6 +843,72 @@ const PHASE_ORDER = ['16avos', 'oitavas', 'quartas', 'semi'];
 const PHASE_LABELS = { '16avos': '16avos de Final', oitavas: 'Oitavas', quartas: 'Quartas', semi: 'Semifinais', final: 'Final' };
 const PHASE_RANGES = { '16avos': [73,88], oitavas: [89,96], quartas: [97,100], semi: [101,102] };
 
+// ─── HELPER: resolve rótulos da aba de eliminatórias ("V 73", "1° A"...) ──────
+// Usado pela página do mata-mata e pela busca por seleção.
+//
+// "1° A" / "2° B" → vira o nome do time SOMENTE quando ambos os classificados
+//   matemáticos do grupo estão confirmados e não se enfrentam mais (posição
+//   imutável). Caso contrário mantém o texto original da planilha.
+// "3° X/Y/Z" → NUNCA resolve; mantém como está na planilha (o critério de
+//   avanço dos 3°s é externo a este código).
+// "V 73" / "P 73" → resolve pelo resultado do jogo indicado (inclusive pênaltis).
+function makeKnockoutResolver(groups, knockoutMatches) {
+  const matchByNum = {};
+  knockoutMatches.forEach(m => { matchByNum[m.jogo] = m; });
+
+  const resolve = (raw) => {
+    if (!raw) return 'A definir';
+    const s = raw.trim();
+
+    // ── Vencedor / Perdedor de um jogo anterior ────────────────────────────────
+    const vMatch = s.match(/^[Vv]\s*(\d+)$/);
+    const pMatch = s.match(/^[Pp]\s*(\d+)$/);
+    if (vMatch || pMatch) {
+      const num = parseInt((vMatch || pMatch)[1], 10);
+      const src = matchByNum[num];
+      const label = vMatch ? `Vencedor Jogo ${num}` : `Perdedor Jogo ${num}`;
+      if (!src || src.s1 === null || src.s2 === null) return label;
+      let t1Venceu;
+      if (src.s1 !== src.s2) t1Venceu = src.s1 > src.s2;
+      else if (src.pen1 !== null && src.pen2 !== null && src.pen1 !== src.pen2) t1Venceu = src.pen1 > src.pen2;
+      else return label; // empate sem pênaltis registrados
+      const vencedor = t1Venceu ? src.t1 : src.t2;
+      const perdedor = t1Venceu ? src.t2 : src.t1;
+      return resolve(vMatch ? vencedor : perdedor);
+    }
+
+    // ── Labels de posição em grupo: "N° Grupo" ────────────────────────────────
+    const rankMatch = s.match(/^(\d)[°ºo]\s*([A-La-l](?:\/[A-La-l])*)\s*$/i);
+    if (rankMatch) {
+      const rank = parseInt(rankMatch[1], 10) - 1; // 0-indexed
+      if (rank >= 2) return s; // 3° colocados — nunca resolve
+
+      const g = groups.find(x => x.id === rankMatch[2].toUpperCase());
+      if (!g) return s;
+
+      const sorted = sortedTeams(g.teams, g.matches, g.extraTeamInfo || {});
+      const team = sorted[rank];
+      if (!team) return s;
+
+      const qualified = getQualifiedTeams(g.teams, g.matches, g.extraTeamInfo || {});
+      if (qualified.size >= 2 && qualified.has(team.name)) {
+        const [q1, q2] = [...qualified];
+        const aindaSeEnfrentam = g.matches.some(m =>
+          (m.s1 === null || m.s2 === null) &&
+          ((m.t1 === q1 && m.t2 === q2) || (m.t1 === q2 && m.t2 === q1))
+        );
+        if (!aindaSeEnfrentam) return team.name;
+      }
+      return s;
+    }
+
+    // ── Texto literal (nome de time já definido na planilha) ──────────────────
+    return s;
+  };
+
+  return resolve;
+}
+
 function KnockoutPage({ groups, onBack }) {
   const [activePhase, setActivePhase] = useState('16avos');
   const [knockoutMatches, setKnockoutMatches] = useState([]);
@@ -832,105 +925,8 @@ function KnockoutPage({ groups, onBack }) {
     return () => clearInterval(id);
   }, []);
 
-  // Mapa jogo# → match para resolução de V/P
-  const matchByNum = {};
-  knockoutMatches.forEach(m => { matchByNum[m.jogo] = m; });
-
-  // Helper: pega o time de um grupo por posição (0=1°, 1=2°, 2=3°)
-  // (mantido para uso futuro em fases avançadas, mas 3° colocados não são resolvidos)
-  const getFromGroup = (groupLetter, rankIndex) => {
-    const g = groups.find(x => x.id === groupLetter.toUpperCase());
-    if (!g) return null;
-    const sorted = sortedTeams(g.teams, g.matches, g.extraTeamInfo || {});
-    return sorted[rankIndex]?.name || null;
-  };
-
-  // Resolve labels da planilha de eliminatórias:
-  //
-  // "1° A" / "2° B" → substitui pelo nome do time SOMENTE quando ambos os
-  //   classificados matemáticos do grupo estão confirmados (posição imutável).
-  //   Caso contrário mantém o texto original da planilha.
-  //
-  // "3° X/Y/Z" ou qualquer label de 3° colocado → NUNCA resolve; mantém como
-  //   está na planilha (o critério de avanço dos 3°s é externo a este código).
-  //
-  // "V 73" / "P 73" → resolve pelo resultado do jogo indicado; o label interno
-  //   do jogo-fonte (t1/t2) é retornado diretamente, sem recursão adicional,
-  //   para evitar que um único time apareça em múltiplos confrontos.
-  const resolveLabel = (raw) => {
-    if (!raw) return 'A definir';
-    const s = raw.trim();
-
-    // ── Vencedor / Perdedor de um jogo anterior ────────────────────────────────
-    const vMatch = s.match(/^[Vv]\s*(\d+)$/);
-    const pMatch = s.match(/^[Pp]\s*(\d+)$/);
-    if (vMatch || pMatch) {
-      const num = parseInt((vMatch || pMatch)[1]);
-      const src = matchByNum[num];
-      const label = vMatch ? `Vencedor Jogo ${num}` : `Perdedor Jogo ${num}`;
-      if (!src || src.s1 === null || src.s2 === null) return label;
-      // Empate no tempo normal: só resolve se houver pênaltis registrados
-      if (src.s1 === src.s2) {
-        if (src.pen1 === null || src.pen2 === null || src.pen1 === src.pen2) return label;
-        if (vMatch) {
-          const winnerRaw = src.pen1 > src.pen2 ? src.t1 : src.t2;
-          return resolveLabel(winnerRaw);
-        } else {
-          const loserRaw = src.pen1 < src.pen2 ? src.t1 : src.t2;
-          return resolveLabel(loserRaw);
-        }
-      }
-      if (vMatch) {
-        // Retorna o label resolvido do jogo-fonte (pode ser "1° A" já substituído ou nome direto)
-        const winnerRaw = src.s1 > src.s2 ? src.t1 : src.t2;
-        return resolveLabel(winnerRaw);
-      } else {
-        const loserRaw = src.s1 < src.s2 ? src.t1 : src.t2;
-        return resolveLabel(loserRaw);
-      }
-    }
-
-    // ── Labels de posição em grupo: "N° Grupo" ────────────────────────────────
-    const rankMatch = s.match(/^(\d)[°ºo]\s*([A-La-l](?:\/[A-La-l])*)\s*$/i);
-    if (rankMatch) {
-      const rank = parseInt(rankMatch[1], 10) - 1; // 0-indexed
-      const groupStr = rankMatch[2];
-
-      // 3° colocados — NUNCA resolve; critério externo. Mantém label da planilha.
-      if (rank >= 2) return s;
-
-      // 1° ou 2° de um grupo
-      const g = groups.find(x => x.id === groupStr.toUpperCase());
-      if (!g) return s;
-
-      const sorted = sortedTeams(g.teams, g.matches, g.extraTeamInfo || {});
-      const teamAtRank = sorted[rank];
-      if (!teamAtRank) return s;
-
-      const qualified = getQualifiedTeams(g.teams, g.matches, g.extraTeamInfo || {});
-
-      // Posição só é imutável quando AMBOS os classificados matemáticos estão
-      // confirmados E os dois não se enfrentam mais em jogo pendente.
-      // Se ainda se enfrentam, o vencedor pode trocar de posição com o outro.
-      if (qualified.size >= 2 && qualified.has(teamAtRank.name)) {
-        const qualifiedNames = [...qualified];
-        const [q1, q2] = qualifiedNames;
-        const stillFaceEachOther = g.matches.some(m =>
-          (m.s1 === null || m.s2 === null) &&
-          ((m.t1 === q1 && m.t2 === q2) || (m.t1 === q2 && m.t2 === q1))
-        );
-        if (!stillFaceEachOther) {
-          return teamAtRank.name;
-        }
-      }
-
-      // Ainda não fixado — mantém label original da planilha
-      return s;
-    }
-
-    // ── Texto literal (nome de time já definido na planilha) ──────────────────
-    return s;
-  };
+  // Traduz os rótulos da planilha ("V 73", "1° A"...) para nomes de times
+  const resolveLabel = makeKnockoutResolver(groups, knockoutMatches);
 
   // Final e 3° lugar sempre visíveis no centro, independente da fase selecionada
   const finalMatch = knockoutMatches.find(m => m.jogo === 104);
@@ -2222,7 +2218,7 @@ function LandingPage({ groups, knockoutMatches = [], onNavigate }) {
 
   return (
     <>
-      {showSearch && <TeamSearch groups={groups} onClose={() => setShowSearch(false)} />}
+      {showSearch && <TeamSearch groups={groups} knockoutMatches={knockoutMatches} onClose={() => setShowSearch(false)} />}
       <div className="container-wrapper page-enter" style={styles.homeWrapper}>
         <div style={styles.homeHeader}>
           <div style={styles.homeSub}>FIFA World Cup • 2026</div>
